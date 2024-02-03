@@ -1,77 +1,69 @@
 package main
 
 import (
-	"database/sql"
-	"fmt"
+	"log"
 	"net/http"
-	"os"
-	"p2p/api"
 
-	"p2p/internal/user/entity"
-	"p2p/internal/user/infra/repository"
-	"p2p/internal/user/usecase"
+	"p2p/controllers"
+	"p2p/initializers"
+	"p2p/routes"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-
-	_ "github.com/mattn/go-sqlite3"
-
-	_ "github.com/lib/pq"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
+var (
+	server              *gin.Engine
+	AuthController      controllers.AuthController
+	AuthRouteController routes.AuthRouteController
+
+	UserController      controllers.UserController
+	UserRouteController routes.UserRouteController
+
+	// PostController      controllers.PostController
+	// PostRouteController routes.PostRouteController
+)
+
+func init() {
+	config, err := initializers.LoadConfig(".")
+	if err != nil {
+		log.Fatal("🚀 Could not load environment variables", err)
+	}
+
+	initializers.ConnectDB(&config)
+
+	AuthController = controllers.NewAuthController(initializers.DB)
+	AuthRouteController = routes.NewAuthRouteController(AuthController)
+
+	UserController = controllers.NewUserController(initializers.DB)
+	UserRouteController = routes.NewRouteUserController(UserController)
+
+	// PostController = controllers.NewPostController(initializers.DB)
+	// PostRouteController = routes.NewRoutePostController(PostController)
+
+	server = gin.Default()
+}
+
 func main() {
-	dbPath := "./db/main.db"
-	sqlDB, err := sql.Open("sqlite3", dbPath)
+	config, err := initializers.LoadConfig(".")
 	if err != nil {
-		panic(err)
-	}
-	defer sqlDB.Close()
-
-	_, err = os.Stat(dbPath)
-	if os.IsNotExist(err) {
-		err = os.MkdirAll("./db", os.ModePerm)
-		if err != nil {
-			panic(err)
-		}
-
-		file, err := os.Create(dbPath)
-		if err != nil {
-			panic(err)
-		}
-		file.Close()
+		log.Fatal("🚀 Could not load environment variables", err)
 	}
 
-	// Create Gorm connection
-	gormDB, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
-	if err != nil {
-		panic(err)
-	}
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowOrigins = []string{"http://localhost:8000", config.ClientOrigin}
+	corsConfig.AllowCredentials = true
 
-	err = gormDB.AutoMigrate(&entity.User{})
-	if err != nil {
-		panic(err)
-	}
-	// Create repositories and use cases
-	userRepository := repository.NewUserRepositoryPostgres(gormDB)
-	createUserUsecase := usecase.NewCreateUserUseCase(userRepository)
-	listUsersUsecase := usecase.NewGetAllUsersUseCase(userRepository)
-	deleteUserUsecase := usecase.NewDeleteUserUseCase(userRepository)
-	getUserByIDUsecase := usecase.NewGetUserByIDUseCase(userRepository)
-	updateUserUsecase := usecase.NewUpdateUserUseCase(userRepository)
+	server.Use(cors.New(corsConfig))
 
-	// Create handlers
-	userHandlers := api.NewUserHandlers(createUserUsecase, listUsersUsecase, deleteUserUsecase, getUserByIDUsecase, updateUserUsecase)
+	router := server.Group("/api")
+	router.GET("/healthchecker", func(ctx *gin.Context) {
+		message := "Welcome to Golang with Gorm and Postgres"
+		ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": message})
+	})
 
-	// Set up Gin router
-	router := gin.Default()
-
-	// Set up user routes
-	userHandlers.SetupRoutes(router)
-
-	// Start the server
-	err = http.ListenAndServe(":8000", router)
-	if err != nil {
-		fmt.Println(err)
-	}
+	AuthRouteController.AuthRoute(router)
+	UserRouteController.UserRoute(router)
+	// PostRouteController.PostRoute(router)
+	log.Fatal(server.Run(":" + config.ServerPort))
 }
