@@ -227,7 +227,7 @@ func (ac *AuthController) RequestNewOTP(ctx *gin.Context) {
 
 	// Verificar se o usuário com o email ou telefone fornecido existe
 	var existingUser models.User
-	err := ac.DB.Where("email = ? OR telephone = ?", payload.Email, payload.Telephone).First(&existingUser).Error
+	err := ac.DB.Where("email = ? OR telephone = ?", strings.ToUpper(payload.Email), payload.Telephone).First(&existingUser).Error
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"status": "fail", "message": "User not found"})
 		return
@@ -235,50 +235,6 @@ func (ac *AuthController) RequestNewOTP(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "Cannot request new OTP at the moment"})
 }
-
-// func (ac *AuthController) RequestNewOTP(ctx *gin.Context) {
-// 	var payload *models.RequestNewOTPInput
-
-// 	if err := ctx.ShouldBindJSON(&payload); err != nil {
-// 		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": err.Error()})
-// 		return
-// 	}
-
-// 	// Verificar se o código anterior expirou
-// 	var otpCode models.OTPCode
-// 	result := ac.DB.Where("(email = ? OR telephone = ?) AND verified = false AND expires_at <= ?", payload.Email, payload.Telephone, time.Now()).Order("expires_at DESC").First(&otpCode)
-
-// 	if result.Error == nil {
-// 		// O código anterior expirou, podemos criar um novo
-// 		otp := utils.GenerateOTP()
-
-// 		// Salvar o novo código OTP na tabela OTPCode
-// 		newOTPCode := models.OTPCode{
-// 			Code:      otp,
-// 			Email:     &payload.Email,
-// 			Telephone: &payload.Telephone,
-// 			Verified:  false,
-// 			ExpiresAt: time.Now().Add(24 * time.Hour), // Expira em 1 dia
-// 			CreatedAt: time.Now(),
-// 			UpdatedAt: time.Now(),
-// 		}
-
-// 		ac.DB.Create(&newOTPCode)
-
-// 		// Enviar o novo OTP por e-mail ou SMS
-// 		if payload.Email != "" {
-// 			utils.SendOTPByEmail(payload.Email, otp)
-// 		} else if payload.Telephone != "" {
-// 			// Substitua com a função para enviar OTP por SMS
-// 			// utils.SendOTPBySMS(payload.Telephone, otp, twilioConfig)
-// 		}
-
-// 		ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "New OTP sent"})
-// 		return
-// 	}
-
-// 	ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "Cannot request new OTP at the moment"})
-// }
 
 func (ac *AuthController) SignInUser(ctx *gin.Context) {
 	var payload *models.SignInInput
