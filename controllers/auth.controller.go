@@ -26,7 +26,7 @@ func NewAuthController(DB *gorm.DB) AuthController {
 // SignUpUser
 // RegisterUser
 func (ac *AuthController) SignUpUser(ctx *gin.Context) {
-	var payload *models.SignUpInput
+	var payload models.SignUpInput
 
 	if err := ctx.ShouldBindJSON(&payload); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": err.Error()})
@@ -68,25 +68,22 @@ func (ac *AuthController) SignUpUser(ctx *gin.Context) {
 	}
 
 	// Agora, só depois de garantir que não há usuário existente, criamos o novo usuário
-	var payloadEmail = &payload.Email
 	now := time.Now()
 	newUser := models.User{
-		FullName: nil,
 		UserName: utils.GenerateRandomName(9),
+		FullName: nil,
 		Telephone: func() *string {
 			if payload.Telephone != "" {
 				return &payload.Telephone
-			} else {
-				return nil
 			}
+			return nil
 		}(),
 		Email: func() *string {
 			if payload.Email != "" {
-				email := strings.ToUpper(*payloadEmail)
+				email := strings.ToUpper(payload.Email)
 				return &email
-			} else {
-				return nil
 			}
+			return nil
 		}(),
 		Password:            hashedPassword,
 		Draft:               true,
@@ -100,33 +97,34 @@ func (ac *AuthController) SignUpUser(ctx *gin.Context) {
 
 	result := ac.DB.Create(&newUser)
 
-	if result.Error != nil {
+	if result.Error != nil && strings.Contains(result.Error.Error(), "duplicate key value violates unique") {
+		ctx.JSON(http.StatusConflict, gin.H{"status": "fail", "message": "User with that email already exists"})
+		return
+	} else if result.Error != nil {
 		ctx.JSON(http.StatusBadGateway, gin.H{"status": "error", "message": "Something bad happened"})
 		return
 	}
 
-	fmt.Println("valor", payload.Email)
-
-	// Enviar OTP (implementação não fornecida aqui)
+	// Generate and Save OTP
 	otp, err := ac.GenerateAndSaveOTP(payload.Email, payload.Telephone)
 	if err != nil {
-		// Se houver um erro ao gerar o OTP, remova o usuário recém-criado
+		// If there's an error generating OTP, remove the newly created user
 		ac.DB.Delete(&newUser)
 		ctx.JSON(http.StatusBadGateway, gin.H{"status": "error", "message": "Failed to generate OTP"})
 		return
 	}
 
-	// Redirecionar para a confirmação do OTP
-	ctx.JSON(http.StatusCreated, gin.H{"status": "success", "message": "User registered. Please confirm OTP"})
-	fmt.Println("Generated OTP:", otp) // Exibir no console para visualização
-
-	userResponse := &models.UserResponse{
-		ID: newUser.ID,
-
-		CreatedAt: newUser.CreatedAt,
-		UpdatedAt: newUser.UpdatedAt,
+	// Send Email with OTP
+	emailData := utils.EmailData{
+		URL:       otp,
+		FirstName: "rosad_tests", // Define o primeiro nome do usuário aqui, se necessário
+		Subject:   "Your OTP for account verification 2P2 AOA",
 	}
-	ctx.JSON(http.StatusCreated, gin.H{"status": "success", "data": gin.H{"user": userResponse}})
+
+	utils.SendEmail(&newUser, &emailData)
+
+	message := "We sent an email with an OTP to " + *newUser.Email
+	ctx.JSON(http.StatusCreated, gin.H{"status": "success", "message": message})
 }
 
 func (ac *AuthController) GenerateAndSaveOTP(email, telephone string) (string, error) {
@@ -330,4 +328,31 @@ func (ac *AuthController) LogoutUser(ctx *gin.Context) {
 	ctx.SetCookie("logged_in", "", -1, "/", "localhost", false, false)
 
 	ctx.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func (ac *AuthController) VerifyEmail(ctx *gin.Context) {
+	var payload models.OTPConfirmationInput
+	if err := ctx.ShouldBindJSON(&payload); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": err.Error()})
+		return
+	}
+
+	var otpCode models.OTPCode
+	if err := ac.DB.Where("code = ?", payload.Code).First(&otpCode).Error; err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "Invalid verification code or user doesn't exist"})
+		return
+	}
+
+	if otpCode.Verified {
+		ctx.JSON(http.StatusConflict, gin.H{"status": "fail", "message": "User already verified"})
+		return
+	}
+
+	otpCode.Verified = true
+	if err := ac.DB.Save(&otpCode).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to verify email"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "Email verified successfully"})
 }

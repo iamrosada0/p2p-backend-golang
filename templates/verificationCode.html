@@ -1,0 +1,33 @@
+{{template "base" .}} {{define "content"}}
+<table role="presentation" class="main">
+  <!-- START MAIN CONTENT AREA -->
+  <tr>
+    <td class="wrapper">
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+        <tr>
+          <td>
+            <p>Caro {{ .FirstName }},</p>
+            <p>
+              Você solicitou recentemente um código de verificação de uso único
+              para acessar sua conta no P2P AOA. Aqui está o seu código OTP:
+            </p>
+            <p><strong>Código OTP:</strong>{{.URL}}</p>
+            <p>
+              Por favor, insira este código na página de login para concluir o
+              processo de autenticação. Este código expirará em 10 minutos por
+              motivos de segurança.
+            </p>
+            <p>
+              Se você não solicitou este código, por favor, ignore este e-mail.
+              Caso contrário, recomendamos que altere imediatamente sua senha e
+              entre em contato conosco.
+            </p>
+            <p>Obrigado por usar nosso serviço.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <!-- END MAIN CONTENT AREA -->
+</table>
+{{end}}
