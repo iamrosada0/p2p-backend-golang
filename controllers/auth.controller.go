@@ -95,8 +95,8 @@ func (ac *AuthController) SignUpUser(ctx *gin.Context) {
 		UpdatedAt:           now,
 	}
 
+	// ac.DB.Create(&newUser)
 	result := ac.DB.Create(&newUser)
-
 	if result.Error != nil && strings.Contains(result.Error.Error(), "duplicate key value violates unique") {
 		ctx.JSON(http.StatusConflict, gin.H{"status": "fail", "message": "User with that email already exists"})
 		return
@@ -132,9 +132,20 @@ func (ac *AuthController) GenerateAndSaveOTP(email, telephone string) (string, e
 	fmt.Println("Email-telephone", email, telephone)
 
 	newOTPCode := models.OTPCode{
-		Code:      otp,
-		Email:     &email,
-		Telephone: &telephone,
+		Code: otp,
+		Telephone: func() *string {
+			if telephone != "" {
+				return &telephone
+			}
+			return nil
+		}(),
+		Email: func() *string {
+			if email != "" {
+				email := strings.ToUpper(email)
+				return &email
+			}
+			return nil
+		}(),
 		ExpiresAt: time.Now().Add(24 * time.Hour), // Expira em 1 dia
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -219,12 +230,20 @@ func (ac *AuthController) RequestNewOTP(ctx *gin.Context) {
 
 		ac.DB.Create(&newOTPCode)
 
+		UpdateUser := models.User{
+			Email: &payload.Email,
+		}
 		// Enviar o novo OTP por e-mail ou SMS
+		// Send Email with OTP
+		emailData := utils.EmailData{
+			URL:       otp,
+			FirstName: "rosad_tests", // Define o primeiro nome do usuário aqui, se necessário
+			Subject:   "Your OTP for account verification 2P2 AOA",
+		}
 		if payload.Email != "" {
-			utils.SendOTPByEmail(payload.Email, otp)
+			utils.SendEmail(&UpdateUser, &emailData)
 		} else if payload.Telephone != "" {
 			// Substitua com a função para enviar OTP por SMS
-			// utils.SendOTPBySMS(payload.Telephone, otp, twilioConfig)
 		}
 
 		ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "New OTP sent"})
@@ -354,5 +373,5 @@ func (ac *AuthController) VerifyEmail(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "Email verified successfully"})
+	ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "Account verified successfully"})
 }
