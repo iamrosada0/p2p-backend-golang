@@ -158,7 +158,6 @@ func (ac *AuthController) ConfirmOTP(ctx *gin.Context) {
 		return
 	}
 
-	fmt.Println(payload, "payload")
 	// Procurar o código OTP na tabela OTPCode
 	var otpCode models.OTPCode
 	result := ac.DB.Where("code = ? AND (email = ? OR telephone = ?) AND verified = false AND expires_at > ?", payload.Code, payload.Email, payload.Telephone, time.Now()).First(&otpCode)
@@ -179,9 +178,18 @@ func (ac *AuthController) ConfirmOTP(ctx *gin.Context) {
 	otpCode.UpdatedAt = time.Now()
 	ac.DB.Save(&otpCode)
 
-	// Lógica adicional (por exemplo, atualizar o estado de Draft para false)
+	// Atualizar o estado de Draft para false
+	var user models.User
+	err := ac.DB.Where("email = ? OR telephone = ?", strings.ToUpper(payload.Email), payload.Telephone).First(&user).Error
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"status": "fail", "message": "User not found"})
+		return
+	}
 
-	ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "OTP confirmed"})
+	user.Draft = false
+	ac.DB.Save(&user)
+
+	ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "OTP confirmed. User account activated"})
 }
 
 func (ac *AuthController) RequestNewOTP(ctx *gin.Context) {
