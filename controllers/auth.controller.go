@@ -146,7 +146,7 @@ func (ac *AuthController) GenerateAndSaveOTP(email, telephone string) (string, e
 			}
 			return nil
 		}(),
-		ExpiresAt: time.Now().Add(24 * time.Hour), // Expira em 1 dia
+		ExpiresAt: time.Now().Add(15 * time.Minute), // Expira em 1 dia
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -169,7 +169,7 @@ func (ac *AuthController) ConfirmOTP(ctx *gin.Context) {
 
 	// Procurar o código OTP na tabela OTPCode
 	var otpCode models.OTPCode
-	result := ac.DB.Where("code = ? AND (email = ? OR telephone = ?) AND verified = false AND expires_at > ?", payload.Code, payload.Email, payload.Telephone, time.Now()).First(&otpCode)
+	result := ac.DB.Where("code = ? AND (email = ? OR telephone = ?) AND verified = false AND expires_at > ?", payload.Code, strings.ToUpper(payload.Email), payload.Telephone, time.Now()).First(&otpCode)
 
 	if result.Error != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "Invalid OTP code or expired"})
@@ -185,7 +185,7 @@ func (ac *AuthController) ConfirmOTP(ctx *gin.Context) {
 	// Marcar o código OTP como verificado
 	otpCode.Verified = true
 	otpCode.UpdatedAt = time.Now()
-	ac.DB.Save(&otpCode)
+	ac.DB.Delete(&otpCode)
 
 	// Atualizar o estado de Draft para false
 	var user models.User
@@ -196,6 +196,12 @@ func (ac *AuthController) ConfirmOTP(ctx *gin.Context) {
 	}
 
 	user.Draft = false
+	if payload.Email != "" {
+		user.IsEmailVerified = true
+	}
+	if payload.Telephone != "" {
+		user.IsTelephoneVerified = true
+	}
 	ac.DB.Save(&user)
 
 	ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "OTP confirmed. User account activated"})
@@ -209,52 +215,56 @@ func (ac *AuthController) RequestNewOTP(ctx *gin.Context) {
 		return
 	}
 
-	// Verificar se o código anterior expirou ou não foi verificado
-	var otpCode models.OTPCode
-	result := ac.DB.Where("(email = ? OR telephone = ?) AND verified = false AND expires_at <= ?", payload.Email, payload.Telephone, time.Now()).Order("expires_at DESC").First(&otpCode)
-
-	if result.Error == nil {
-		// O código anterior expirou ou não foi verificado, podemos criar um novo
-		otp := utils.GenerateOTP()
-
-		// Salvar o novo código OTP na tabela OTPCode
-		newOTPCode := models.OTPCode{
-			Code:      otp,
-			Email:     &payload.Email,
-			Telephone: &payload.Telephone,
-			Verified:  false,
-			ExpiresAt: time.Now().Add(24 * time.Hour), // Expira em 1 dia
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-
-		ac.DB.Create(&newOTPCode)
-
-		UpdateUser := models.User{
-			Email: &payload.Email,
-		}
-		// Enviar o novo OTP por e-mail ou SMS
-		// Send Email with OTP
-		emailData := utils.EmailData{
-			URL:       otp,
-			FirstName: "rosad_tests", // Define o primeiro nome do usuário aqui, se necessário
-			Subject:   "Your OTP for account verification 2P2 AOA",
-		}
-		if payload.Email != "" {
-			utils.SendEmail(&UpdateUser, &emailData)
-		} else if payload.Telephone != "" {
-			// Substitua com a função para enviar OTP por SMS
-		}
-
-		ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "New OTP sent"})
-		return
-	}
-
-	// Verificar se o usuário com o email ou telefone fornecido existe
+	// Check if the user exists with the provided email or telephone
 	var existingUser models.User
 	err := ac.DB.Where("email = ? OR telephone = ?", strings.ToUpper(payload.Email), payload.Telephone).First(&existingUser).Error
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"status": "fail", "message": "User not found"})
+		return
+	}
+
+	// Check if the previous OTP code has expired or not verified
+	var otpCode models.OTPCode
+	query := ac.DB.Where("expires_at <= ? AND verified = false", time.Now())
+
+	if payload.Email != "" {
+		query = query.Where("email = ?", strings.ToUpper(payload.Email))
+	} else if payload.Telephone != "" {
+		query = query.Where("telephone = ?", payload.Telephone)
+	}
+
+	query = query.Order("expires_at DESC").First(&otpCode)
+
+	if query.Error == nil {
+		// Previous OTP code expired or not verified, generate a new one
+		otp := utils.GenerateOTP()
+
+		// Update the existing OTP code in the database with new values
+		updateData := map[string]interface{}{
+			"code":       otp,
+			"expires_at": time.Now().Add(15 * time.Minute), // Expires in 1 day
+			"created_at": time.Now(),
+			"updated_at": time.Now(),
+		}
+
+		if err := ac.DB.Model(&otpCode).Updates(updateData).Error; err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to generate OTP"})
+			return
+		}
+
+		// Send the new OTP via email or SMS
+		emailData := utils.EmailData{
+			URL:       otp,
+			FirstName: "rosad_tests", // Set the user's first name here if necessary
+			Subject:   "Your OTP for account verification 2P2 AOA",
+		}
+		if payload.Email != "" {
+			utils.SendEmail(&existingUser, &emailData)
+		} else if payload.Telephone != "" {
+			// Replace with the function to send OTP via SMS
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "New OTP sent"})
 		return
 	}
 

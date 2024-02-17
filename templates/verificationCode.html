@@ -1,28 +1,40 @@
 {{template "base" .}} {{define "content"}}
-<table role="presentation" class="main">
+<table
+  role="presentation"
+  class="main"
+  style="
+    font-family: Arial, sans-serif;
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  "
+>
   <!-- START MAIN CONTENT AREA -->
   <tr>
     <td class="wrapper">
       <table role="presentation" border="0" cellpadding="0" cellspacing="0">
         <tr>
           <td>
-            <p>Caro {{ .FirstName }},</p>
-            <p>
-              Você solicitou recentemente um código de verificação de uso único
-              para acessar sua conta no P2P AOA. Aqui está o seu código OTP:
+            <h2 style="margin-bottom: 15px">
+              Bem-vindo ao
+              <strong class="company-name" style="color: #007bff"
+                >BorderlessKwanza!</strong
+              >
+            </h2>
+            <p style="margin-bottom: 15px; line-height: 1.6">
+              Você precisa verificar seu endereço de e-mail para continuar
+              usando sua conta do BorderlessKwanza. Digite o seguinte código
+              para verificar seu endereço de e-mail:
             </p>
-            <p><strong>Código OTP:</strong>{{.URL}}</p>
-            <p>
-              Por favor, insira este código na página de login para concluir o
-              processo de autenticação. Este código expirará em 10 minutos por
-              motivos de segurança.
+            <h1 class="code-otp" style="font-size: 1.5rem; margin-bottom: 15px">
+              {{.URL}}
+            </h1>
+            <p style="margin-bottom: 15px; line-height: 1.6">
+              Obrigado por escolher nosso serviço ❤️.
             </p>
-            <p>
-              Se você não solicitou este código, por favor, ignore este e-mail.
-              Caso contrário, recomendamos que altere imediatamente sua senha e
-              entre em contato conosco.
-            </p>
-            <p>Obrigado por usar nosso serviço.</p>
           </td>
         </tr>
       </table>
