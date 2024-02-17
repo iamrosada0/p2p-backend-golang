@@ -16,7 +16,7 @@ func NewAuthRouteController(authController controllers.AuthController) AuthRoute
 }
 
 func (rc *AuthRouteController) AuthRoute(rg *gin.RouterGroup) {
-	router := rg.Group("auth")
+	router := rg.Group("v1/auth")
 
 	router.POST("/register", rc.authController.SignUpUser)
 	router.POST("/login", rc.authController.SignInUser)
@@ -24,6 +24,7 @@ func (rc *AuthRouteController) AuthRoute(rg *gin.RouterGroup) {
 	router.GET("/logout", middleware.DeserializeUser(), rc.authController.LogoutUser)
 	router.POST("/register/otp", rc.authController.ConfirmOTP)
 	router.POST("/register/resend/otp", rc.authController.RequestNewOTP)
+	router.POST("/register/change/email_tephone", rc.authController.ChangeEmailOrTelephoneBeforeToBeVerified)
 
 	router.GET("/verifyemail/:verificationCode", rc.authController.VerifyEmail)
 

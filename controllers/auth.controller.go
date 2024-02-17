@@ -105,8 +105,9 @@ func (ac *AuthController) SignUpUser(ctx *gin.Context) {
 		return
 	}
 
+	newUserIDString := newUser.ID.String()
 	// Generate and Save OTP
-	otp, err := ac.GenerateAndSaveOTP(payload.Email, payload.Telephone)
+	otp, err := ac.GenerateAndSaveOTP(payload.Email, payload.Telephone, newUserIDString)
 	if err != nil {
 		// If there's an error generating OTP, remove the newly created user
 		ac.DB.Delete(&newUser)
@@ -127,7 +128,7 @@ func (ac *AuthController) SignUpUser(ctx *gin.Context) {
 	ctx.JSON(http.StatusCreated, gin.H{"status": "success", "message": message})
 }
 
-func (ac *AuthController) GenerateAndSaveOTP(email, telephone string) (string, error) {
+func (ac *AuthController) GenerateAndSaveOTP(email, telephone, id string) (string, error) {
 	otp := utils.GenerateOTP()
 	fmt.Println("Email-telephone", email, telephone)
 
@@ -146,6 +147,7 @@ func (ac *AuthController) GenerateAndSaveOTP(email, telephone string) (string, e
 			}
 			return nil
 		}(),
+		UserID:    id,
 		ExpiresAt: time.Now().Add(15 * time.Minute), // Expira em 1 dia
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -223,9 +225,9 @@ func (ac *AuthController) RequestNewOTP(ctx *gin.Context) {
 		return
 	}
 
-	// Check if the previous OTP code has expired or not verified
+	// Check if there is an existing OTP code for the user
 	var otpCode models.OTPCode
-	query := ac.DB.Where("expires_at <= ? AND verified = false", time.Now())
+	query := ac.DB.Where("verified = false")
 
 	if payload.Email != "" {
 		query = query.Where("email = ?", strings.ToUpper(payload.Email))
@@ -233,42 +235,107 @@ func (ac *AuthController) RequestNewOTP(ctx *gin.Context) {
 		query = query.Where("telephone = ?", payload.Telephone)
 	}
 
-	query = query.Order("expires_at DESC").First(&otpCode)
-
-	if query.Error == nil {
-		// Previous OTP code expired or not verified, generate a new one
-		otp := utils.GenerateOTP()
-
-		// Update the existing OTP code in the database with new values
-		updateData := map[string]interface{}{
-			"code":       otp,
-			"expires_at": time.Now().Add(15 * time.Minute), // Expires in 1 day
-			"created_at": time.Now(),
-			"updated_at": time.Now(),
-		}
-
-		if err := ac.DB.Model(&otpCode).Updates(updateData).Error; err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to generate OTP"})
-			return
-		}
-
-		// Send the new OTP via email or SMS
-		emailData := utils.EmailData{
-			URL:       otp,
-			FirstName: "rosad_tests", // Set the user's first name here if necessary
-			Subject:   "Verifique o seu e-mail",
-		}
-		if payload.Email != "" {
-			utils.SendEmail(&existingUser, &emailData)
-		} else if payload.Telephone != "" {
-			// Replace with the function to send OTP via SMS
-		}
-
-		ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "New OTP sent"})
+	if err := query.First(&otpCode).Error; err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "Cannot request new OTP at the moment"})
 		return
 	}
 
-	ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "Cannot request new OTP at the moment"})
+	// Previous OTP code expired or not verified, generate a new one
+	otp := utils.GenerateOTP()
+
+	// Update the existing OTP code in the database with new values
+	updateData := map[string]interface{}{
+		"code":       otp,
+		"expires_at": time.Now().Add(15 * time.Minute), // Expires in 15 minutes
+		"created_at": time.Now(),
+		"updated_at": time.Now(),
+	}
+
+	if err := ac.DB.Model(&otpCode).Updates(updateData).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to generate OTP"})
+		return
+	}
+
+	// Send the new OTP via email or SMS
+	emailData := utils.EmailData{
+		URL:       otp,
+		FirstName: "rosad_tests", // Set the user's first name here if necessary
+		Subject:   "Verifique o seu e-mail",
+	}
+	if payload.Email != "" {
+		utils.SendEmail(&existingUser, &emailData)
+	} else if payload.Telephone != "" {
+		// Replace with the function to send OTP via SMS
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "New OTP sent"})
+}
+
+func (ac *AuthController) ChangeEmailOrTelephoneBeforeToBeVerified(ctx *gin.Context) {
+	// Parse JSON payload
+	var payload *models.ChangeEmailOrTelefoneBeforeToBeVerifiedInput
+	if err := ctx.ShouldBindJSON(&payload); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": err.Error()})
+		return
+	}
+
+	// Check if the user exists with the provided user ID
+	var existingUser models.User
+	err := ac.DB.Where("id = ? AND draft = true ", payload.UserID).First(&existingUser).Error
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"status": "fail", "message": "User not found"})
+		return
+	}
+
+	// Update the email or telephone for the existing user
+	if payload.Email != "" {
+		existingUser.Email = func() *string {
+			email := strings.ToUpper(payload.Email)
+			return &email
+		}()
+	} else if payload.Telephone != "" {
+		existingUser.Telephone = &payload.Telephone
+	}
+
+	// Generate a new OTP code
+	newOTP := utils.GenerateOTP()
+
+	// Update the existing OTP code in the database with the new values
+	updateData := map[string]interface{}{
+		"code":       newOTP,
+		"expires_at": time.Now().Add(15 * time.Minute), // Expires in 15 minutes
+		"updated_at": time.Now(),
+	}
+	if payload.Email != "" {
+		updateData["email"] = strings.ToUpper(payload.Email)
+	}
+	if payload.Telephone != "" {
+		updateData["telephone"] = payload.Telephone
+	}
+
+	// Find the existing OTP code for the user
+	var existingOTP models.OTPCode
+	err = ac.DB.Where("user_id = ?", payload.UserID).First(&existingOTP).Error
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"status": "fail", "message": "OTP code not found"})
+		return
+	}
+
+	// Update the existing OTP code
+	err = ac.DB.Model(&existingOTP).Updates(updateData).Error
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update OTP code"})
+		return
+	}
+
+	// Save the updated user information
+	err = ac.DB.Save(&existingUser).Error
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update user information"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "User information updated successfully"})
 }
 
 func (ac *AuthController) SignInUser(ctx *gin.Context) {
