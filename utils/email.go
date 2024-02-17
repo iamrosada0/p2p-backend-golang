@@ -50,7 +50,7 @@ func SendEmail(user *models.User, data *EmailData) {
 	}
 
 	// Sender data.
-	from := config.EmailFrom
+	from := "BoardlessKwanza <" + config.EmailFrom + ">"
 	smtpPass := config.SMTPPass
 	smtpUser := config.SMTPUser
 	to := *user.Email
