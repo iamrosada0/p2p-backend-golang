@@ -21,10 +21,10 @@ func (uc *UserController) GetMe(ctx *gin.Context) {
 	currentUser := ctx.MustGet("currentUser").(models.User)
 
 	userResponse := &models.UserResponse{
-		ID: currentUser.ID,
-		// Name:      currentUser.Name,
-		// Email:     currentUser.Email,
-		// Photo:     currentUser.Photo,
+		ID:        currentUser.ID,
+		UserName:  currentUser.UserName,
+		Telephone: *currentUser.Telephone,
+		Email:     *currentUser.Email,
 
 		CreatedAt: currentUser.CreatedAt,
 		UpdatedAt: currentUser.UpdatedAt,

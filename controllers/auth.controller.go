@@ -347,7 +347,7 @@ func (ac *AuthController) SignInUser(ctx *gin.Context) {
 	}
 
 	var user models.User
-	result := ac.DB.First(&user, "email = ?", strings.ToLower(payload.Email))
+	result := ac.DB.First(&user, "email = ?", strings.ToUpper(payload.Email))
 	if result.Error != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "Invalid email or Password"})
 		return
