@@ -118,7 +118,7 @@ func (ac *AuthController) SignUpUser(ctx *gin.Context) {
 	emailData := utils.EmailData{
 		URL:       otp,
 		FirstName: "rosad_tests", // Define o primeiro nome do usuário aqui, se necessário
-		Subject:   "Your OTP for account verification 2P2 AOA",
+		Subject:   "Verifique o seu e-mail",
 	}
 
 	utils.SendEmail(&newUser, &emailData)
@@ -256,7 +256,7 @@ func (ac *AuthController) RequestNewOTP(ctx *gin.Context) {
 		emailData := utils.EmailData{
 			URL:       otp,
 			FirstName: "rosad_tests", // Set the user's first name here if necessary
-			Subject:   "Your OTP for account verification 2P2 AOA",
+			Subject:   "Verifique o seu e-mail",
 		}
 		if payload.Email != "" {
 			utils.SendEmail(&existingUser, &emailData)
