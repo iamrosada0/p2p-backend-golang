@@ -27,6 +27,8 @@ func (uc *UserController) GetMe(ctx *gin.Context) {
 		UserName:  currentUser.UserName,
 		Telephone: *currentUser.Telephone,
 		Email:     *currentUser.Email,
+		Biography: *currentUser.Biography,
+		Photo:     *currentUser.Photo,
 
 		CreatedAt: currentUser.CreatedAt,
 		UpdatedAt: currentUser.UpdatedAt,
@@ -35,6 +37,17 @@ func (uc *UserController) GetMe(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"status": "success", "data": gin.H{"user": userResponse}})
 }
 
+func (uc *UserController) GetUser(ctx *gin.Context) {
+	userID := ctx.Param("id")
+
+	var user models.User
+	if err := uc.DB.First(&user, "id = ?", userID).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"status": "success", "data": user})
+}
 func (uc *UserController) CreateProfile(ctx *gin.Context) {
 	var user models.User
 	if err := ctx.ShouldBindJSON(&user); err != nil {

@@ -47,6 +47,8 @@ type UserResponse struct {
 	UserName  string    `json:"user_name,omitempty"`
 	Email     string    `json:"email,omitempty"`
 	Telephone string    `json:"telephone,omitempty"`
+	Biography string    `json:"biography,omitempty"`
+	Photo     string    `json:"photo,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
