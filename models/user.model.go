@@ -17,10 +17,13 @@ type User struct {
 	IsEmailVerified     bool      `gorm:"not null"`
 	IsTelephoneVerified bool      `gorm:"not null"`
 	IsAddressVerified   bool      `gorm:"not null"`
+	Photo               *string   // Pode ser nulo
+	Biography           *string   // Pode ser nulo
 	Draft               bool      `gorm:"not null"`
 	CreatedAt           time.Time `gorm:"not null"`
 	UpdatedAt           time.Time `gorm:"not null"`
 }
+
 type SignUpInput struct {
 	Telephone string `json:"telephone"`
 	Email     string `json:"email"`
